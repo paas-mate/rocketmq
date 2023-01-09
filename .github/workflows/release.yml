@@ -4,17 +4,14 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: write-all
 
 jobs:
   push_to_registries:
     name: Push Docker image to multiple registries
     runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -30,14 +27,35 @@ jobs:
       - name: Push to Docker Hub
         uses: docker/build-push-action@v3
         with:
-          context: broker
           push: true
           tags: ttbb/rocketmq:nake
           platforms: linux/amd64,linux/arm64
-      - name: Push to Docker Hub
-        uses: docker/build-push-action@v3
+      - name: Save Docker Images
+        run: docker pull ttbb/rocketmq:nake;docker save ttbb/rocketmq:nake -o rocketmq-nake.tar.gz
+      - uses: dev-drprasad/delete-tag-and-release@v0.2.0
         with:
-          context: dashboard
-          push: true
-          tags: ttbb/rocketmq:dashboard
-          platforms: linux/amd64,linux/arm64
+          delete_release: true
+          tag_name: latest_docker_image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag release
+        uses: tvdias/github-tagger@v0.0.2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: latest_docker_image
+
+      # Creates the new release with the binary as a release asset.
+      # If the previous Action was skipped, then this keeps the same tag as the
+      # previous release.
+      - name: Create new release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: "Latest docker image"
+          name: "latest docker image"
+          tag_name: latest_docker_image
+          files: rocketmq-nake.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
